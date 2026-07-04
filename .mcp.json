@@ -3,6 +3,13 @@
     "playwright": {
       "command": "npx",
       "args": ["@playwright/mcp@latest", "--config", "_opensquad/config/playwright.config.json"]
+    },
+    "asaas_matriz": {
+      "type": "http",
+      "url": "https://docs.asaas.com/mcp",
+      "headers": {
+        "access_token": "${ASAAS_MATRIZ_API_KEY}"
+      }
     }
   }
 }
