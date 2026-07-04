@@ -38,13 +38,29 @@ key is supplied (a production key against `execute-request` returns
 `401 invalid_access_token`, since the underlying host is always sandbox).
 
 **For real production data (what the squad actually needs), do not use this
-MCP's `execute-request`.** Instead, use the generic `web_fetch` skill (already
-listed in `squad.yaml`) to call `https://api.asaas.com/v3/...` directly with
-the `access_token` header — the same approach already implemented in
-`squads/controle-financeiro-imobiliaria/app/src/lib/asaas/client.ts`. This MCP
-remains valuable for discovering endpoint schemas/parameters
-(`search-endpoints`, `get-endpoint`) before building that `web_fetch` call, and
-for validating request shapes against sandbox during development.
+MCP's `execute-request`, and do not use the generic `web_fetch` skill either**
+— `web_fetch` has no way to set a custom header, and Asaas requires
+`access_token` as a header (never as a query param), so it cannot authenticate.
+
+Instead, use **Bash** to call the API directly with `curl`, referencing the
+credential as a shell environment variable — never typed or read literally:
+
+```bash
+curl -s "https://api.asaas.com/v3/customers?limit=100" \
+  -H "access_token: $ASAAS_MATRIZ_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: pcomw-squad/1.0 (bash; production)"
+```
+
+`ASAAS_MATRIZ_API_KEY` (and any other configured account's key) is exported to
+every Bash subprocess automatically via the `env` block in
+`.claude/settings.local.json` — the agent never needs to see or embed the raw
+key value to make this call. This mirrors, at the shell level, the same
+approach already implemented in
+`squads/controle-financeiro-imobiliaria/app/src/lib/asaas/client.ts` for the
+dashboard. Use this MCP server only to discover endpoint schemas/parameters
+(`search-endpoints`, `get-endpoint`) before building the `curl` call, and to
+validate request shapes against sandbox during development.
 
 ## Multi-account setup
 
@@ -79,12 +95,14 @@ needs "money actually available," filter to `RECEIVED` only.
 2. Use this MCP's discovery tools (`search-endpoints`, `get-endpoint`) to find
    the right endpoint, required parameters, and response schema — don't guess
    parameters.
-3. To actually collect production data, call the resolved endpoint directly
-   via `web_fetch` against `https://api.asaas.com/v3/<path>` with headers
-   `access_token: <account's key>`, `Content-Type: application/json`, and a
-   descriptive `User-Agent` (Asaas requires this for accounts created after
-   2024-06-13). Only use this MCP's `execute-request` for sandbox testing —
-   it will not reach production regardless of which key is supplied.
+3. To actually collect production data, call the resolved endpoint via
+   **Bash + curl** against `https://api.asaas.com/v3/<path>`, with headers
+   `access_token: $<ACCOUNT_ENV_VAR>` (shell variable reference, never the
+   literal key), `Content-Type: application/json`, and a descriptive
+   `User-Agent` (Asaas requires this for accounts created after 2024-06-13).
+   Only use this MCP's `execute-request` for sandbox testing — it will not
+   reach production regardless of which key is supplied, and never use the
+   generic `web_fetch` skill for Asaas — it can't set the required header.
 4. For listings, paginate (`offset`/`limit`, check `hasMore`) until the
    response signals no more pages — don't silently truncate a dataset (mirrors
    the pagination behavior already implemented in
